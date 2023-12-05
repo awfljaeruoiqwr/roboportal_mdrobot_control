@@ -7,18 +7,19 @@ import serial
 import struct
 import time
 
-MOTOR_CONTROLLER_MACHINE_ID = 183
-USER_MACHINE_ID             = 184
+MOTOR_CONTROLLER_MACHINE_ID =  183
+USER_MACHINE_ID             =  184
 ID                          =  1
-PID_PNT_VEL_CMD             = 207
+PID_PNT_VEL_CMD             =  207
 PID_PNT_MAIN_TOTAL_DATA_NUM =  24 
-PID_MAIN_DATA               = 193
+PID_MAIN_DATA               =  193
 ENABLE                      =  1  
-RETURN_PNT_MAIN_DATA        = 2    
+RETURN_PNT_MAIN_DATA        =  2
+MAX_PACKET_SIZE             =  255
 
-LEFT                        =   0
-RIGHT                       =   1
-VELOCITY_CONSTANT_VALUE     =   9.5492743
+LEFT                        =  0
+RIGHT                       =  1
+VELOCITY_CONSTANT_VALUE     =  9.5492743
 
 def byte2int(low_byte, high_byte):
     return low_byte | high_byte << 8
