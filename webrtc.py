@@ -26,22 +26,24 @@ def byte2int(low_byte, high_byte):
 def byte2long(data1, data2, data3, data4):
     return data1 | data2 << 8 | data3 << 16 | data4 << 24
 
-def int2byte(input_int):
-    low_byte = input_int & 0xff
-    high_byte = (input_int >> 8) & 0xff
-    return low_byte, high_byte
+class IByte:
+    def __init__(self, nIn):
+        self.byLow = nIn & 0xff
+        self.byHigh = (nIn >> 8) & 0xff
+        
+def int2byte(nIn):
+    return IByte(nIn)
 
 ctx = Context.instance()
+socket = None
  
-async def receive():
+async def receive(socket):
     print("Receiving")
-    socket = ctx.socket(zmq.ROUTER)
-    socket.bind("tcp://*:5556")
     req = await socket.recv_multipart()
     print(f"Robot received {req[1]}")
     return req[1]
 
-async def send():
+async def send(socket):
     print("Sending")
 
     ser = serial.Serial(
@@ -67,18 +69,23 @@ async def send():
     ser.close()
 
 async def process_telemetry(telemetry):
-    if telemetry["controls"]["w"] == 1:
-        linear = 2000
-        angular = 2000
-    elif telemetry["controls"]["s"] == 1:
-        linear = -2000
-        angular = -2000
-    elif telemetry["controls"]["a"] == 1:
-        linear = 2000
-        angular = 1500
-    elif telemetry["controls"]["d"] == 1:
-        linear = 1500
-        angular = 2000
+    controls = telemetry.get("controls", {})
+    w = controls.get("w", 0)
+    s = controls.get("s", 0)
+    a = controls.get("a", 0)
+    d = controls.get("d", 0)
+    if w == 1:
+        linear = 3.5
+        angular = 0
+    elif s == 1:
+        linear = -3.5
+        angular = 0
+    elif a == 1:
+        linear = 0
+        angular = 3.5
+    elif d == 1:
+        linear = 0
+        angular = -3.5
     else:
         linear = angular = 0
 
@@ -111,31 +118,34 @@ def RobotSpeedToRPMSpeed(linear, angular):
     goal_rpm_speed[1] = np.int16(wheel_velocity_cmd[1])
 
 def put_pnt_vel_cmd(ser, left_rpm, right_rpm):
-
+    
+    byD = bytearray(MAX_PACKET_SIZE)
     byDataNum = 7
 
-    packet = bytearray()
-    packet.append(MOTOR_CONTROLLER_MACHINE_ID)
-    packet.append(USER_MACHINE_ID)
-    packet.append(ID)
-    packet.append(PID_PNT_VEL_CMD)
-    packet.append(byDataNum)
-    packet.append(ENABLE)
-    packet.extend(int2byte(left_rpm))
-    packet.append(ENABLE)
-    packet.extend(int2byte(right_rpm))
-    packet.append(RETURN_PNT_MAIN_DATA)
+    byD[0] = MOTOR_CONTROLLER_MACHINE_ID # 모터 트라이버 ID
+    byD[1] = USER_MACHINE_ID             # 내 PC ID
+    byD[2] = ID                          # 모터 트라이버 ID
+    byD[3] = PID_PNT_VEL_CMD             # RPM 명령 입력 ID
+    byD[4] = byDataNum
+    byD[5] = ENABLE
+    left = int2byte(left_rpm)
+    byD[6], byD[7] = left.byLow, left.byHigh
+    byD[8] = ENABLE
+    right = int2byte(right_rpm)
+    byD[9], byD[10] = right.byLow, right.byHigh
+    byD[11] = RETURN_PNT_MAIN_DATA
+    byChkSum = sum(byD[0:12]) & 0xFF
+    byD[12] = ~(byChkSum ^ 0xFF) + 1 & 0xFF
 
-    checksum = sum(packet) & 0xFF
-    packet.append(~checksum + 1 & 0xFF)
-
-    for byte in packet:
+    for byte in byD:
         ser.write(struct.pack('B', byte))
-        time.sleep(1)
-
-async def main():    
+        
+async def main():
+    global socket
+    socket = ctx.socket(zmq.ROUTER)
+    socket.bind("tcp://*5556")
     while True:
-        await send()
+        await send(socket)
 
 if __name__ == "__main__":
     asyncio.run(main())
